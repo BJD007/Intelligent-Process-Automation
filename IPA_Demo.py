@@ -5,6 +5,7 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import classification_report
 import nltk
 from nltk.corpus import stopwords
+from nltk.sentiment import SentimentIntensityAnalyzer
 import re
 import smtplib
 from email.mime.text import MIMEText
@@ -12,6 +13,7 @@ import time
 
 # Download necessary NLTK data
 nltk.download('stopwords')
+nltk.download('vader_lexicon')
 stop_words = set(stopwords.words('english'))
 
 # 1. RPA Component: Simulating ticket extraction
@@ -42,13 +44,27 @@ class TicketClassifier:
         return self.model.predict(X_vectorized)
 
 # Initial response generation (simplified)
-def generate_initial_response(category):
+def generate_initial_response(category, sentiment):
     responses = {
         'Technical': "Thank you for contacting our technical support. We're looking into your issue.",
         'Billing': "We've received your billing inquiry and will respond shortly.",
         'General': "Thank you for your inquiry. We'll get back to you soon."
     }
-    return responses.get(category, "Thank you for contacting us. We'll respond soon.")
+    response = responses.get(category, "Thank you for contacting us. We'll respond soon.")
+    if sentiment == 'negative':
+        response += " We understand your frustration and are prioritizing your issue."
+    return response
+
+# Sentiment analysis
+def analyze_sentiment(text):
+    sia = SentimentIntensityAnalyzer()
+    sentiment_scores = sia.polarity_scores(text)
+    if sentiment_scores['compound'] >= 0.05:
+        return 'positive'
+    elif sentiment_scores['compound'] <= -0.05:
+        return 'negative'
+    else:
+        return 'neutral'
 
 # Simulated ticket routing
 def route_ticket(ticket_id, category, department_emails):
@@ -102,7 +118,8 @@ def run_ipa_process(data_file, department_emails):
     new_tickets = extract_tickets('new_tickets.csv')  # Simulated new tickets
     for _, ticket in new_tickets.iterrows():
         category = classifier.predict([ticket['text']])[0]
-        initial_response = generate_initial_response(category)
+        sentiment = analyze_sentiment(ticket['text'])
+        initial_response = generate_initial_response(category, sentiment)
         
         # Route ticket
         route_ticket(ticket['id'], category, department_emails)
